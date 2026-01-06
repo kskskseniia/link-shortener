@@ -10,11 +10,11 @@ public interface ShortLinkRepository {
 
     void save(ShortLink link);
 
-    Optional<ShortLink> findByCode(String code);
+    Optional<ShortLink> findByShortKey(String shortKey);
 
     List<ShortLink> findByOwnerUuid(String ownerUuid);
 
-    boolean deleteByCode(String code);
+    boolean deleteByShortKey(String shortKey);
 
     List<ShortLink> findExpired(Instant now);
 }

@@ -1,5 +1,5 @@
 package ru.promo.shortener.core.service;
 
-public interface CodeGenerator {
+public interface ShortKeyGenerator {
     String generate();
 }
