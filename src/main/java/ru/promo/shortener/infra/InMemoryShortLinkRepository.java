@@ -10,7 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class InMemoryShortLinkRepository implements ShortLinkRepository {
 
-    // Храним по shortKey: shortKey -> ShortLink
+    // Храним по shortKey: shortKey -> ShortLink (объект)
     private final Map<String, ShortLink> byShortKey = new ConcurrentHashMap<>();
 
     // Дополнительный индекс: UUID пользователя -> набор shortKey его ссылок

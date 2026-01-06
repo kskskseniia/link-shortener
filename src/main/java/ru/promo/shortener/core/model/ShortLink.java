@@ -25,61 +25,37 @@ public final class ShortLink {
         this.ownerUuid = Objects.requireNonNull(ownerUuid, "ownerUuid");
         this.createdAt = Objects.requireNonNull(createdAt, "createdAt");
         this.expiresAt = Objects.requireNonNull(expiresAt, "expiresAt");
+
         this.maxClicks = maxClicks;
         this.clicks = 0;
         this.status = LinkStatus.ACTIVE;
     }
 
-    public String getShortKey() {
-        return shortKey;
-    }
+    public String getShortKey() { return shortKey; }
+    public String getOriginalUrl() { return originalUrl; }
+    public String getOwnerUuid() { return ownerUuid; }
+    public Instant getCreatedAt() { return createdAt; }
+    public Instant getExpiresAt() { return expiresAt; }
+    public int getMaxClicks() { return maxClicks; }
+    public int getClicks() { return clicks; }
+    public LinkStatus getStatus() { return status; }
 
-    public String getOriginalUrl() {
-        return originalUrl;
-    }
-
-    public String getOwnerUuid() {
-        return ownerUuid;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
-    public Instant getExpiresAt() {
-        return expiresAt;
-    }
-
-    public int getMaxClicks() {
-        return maxClicks;
-    }
-
-    public int getClicks() {
-        return clicks;
-    }
-
-    public LinkStatus getStatus() {
-        return status;
+    public boolean isActive() {
+        return status == LinkStatus.ACTIVE;
     }
 
     public boolean isExpiredByTtl(Instant now) {
         return now.isAfter(expiresAt);
     }
 
-    public boolean isActive() {
-        return status == LinkStatus.ACTIVE;
-    }
-
     public void markExpiredByTtl() {
-        if (status == LinkStatus.ACTIVE) {
+        if (status == LinkStatus.ACTIVE)
             status = LinkStatus.EXPIRED_BY_TTL;
-        }
     }
 
     public void markExpiredByClicks() {
-        if (status == LinkStatus.ACTIVE) {
+        if (status == LinkStatus.ACTIVE)
             status = LinkStatus.EXPIRED_BY_CLICKS;
-        }
     }
 
     public void markDeleted() {
@@ -88,11 +64,15 @@ public final class ShortLink {
 
     public void setMaxClicks(int maxClicks) {
         this.maxClicks = maxClicks;
+        // если новый лимит уже меньше/равен текущим кликам — ссылка должна стать недоступной
+        if (this.clicks >= this.maxClicks && status == LinkStatus.ACTIVE) {
+            markExpiredByClicks();
+        }
     }
 
     public void registerClick() {
         this.clicks++;
-        if (clicks >= maxClicks) {
+        if (this.clicks >= this.maxClicks) {
             markExpiredByClicks();
         }
     }
