@@ -78,14 +78,17 @@ src/main/resources/application.properties
 ```
 Пример конфигурации:
 ```
-shortkey.length.initial=6  
-shortkey.length.max=10  
-shortkey.attempts.per.length=10
+# ShortKey generation
+shortkey.length.initial      = 6    # стартовая длина ключа
+shortkey.length.max          = 10   # максимальная длина ключа
+shortkey.attempts.per.length = 10   # попыток генерации на длину
 
-link.ttl.seconds=3600  
-link.default.max-clicks=3
+# Link settings
+link.ttl.seconds             = 3600 # время жизни ссылки (сек)
+link.default.max-clicks      = 3    # лимит кликов по умолчанию
 
-cleanup.interval.seconds=60
+# Cleanup settings
+cleanup.interval.seconds     = 60   # интервал очистки (сек)
 ```
 **Важно:**  
 Время жизни ссылки (**TTL**) задаётся системой и **не может изменяться пользователем**, что соответствует требованиям технического задания.
@@ -305,6 +308,8 @@ src/main/java/ru/promo/shortener/
 - **SOLID (базовый уровень)**
 - **Thread Safety** — использование потокобезопасных коллекций
 - **Testability** — бизнес-логика изолирована и покрыта unit-тестами  
+
+---
 
 ## **Тестирование**
 
