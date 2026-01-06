@@ -7,6 +7,7 @@ import ru.promo.shortener.core.service.exceptions.NotFoundException;
 import ru.promo.shortener.core.service.exceptions.ValidationException;
 
 import java.time.Instant;
+import java.time.Clock;
 import java.util.Objects;
 import java.net.URI;
 
@@ -24,12 +25,22 @@ public class ShortLinkService {
 
     private static final int MAX_URL_LENGTH = 2048;
 
+    private final Clock clock;
+
     public ShortLinkService(ShortLinkRepository repository,
                             ShortKeyGenerator generator,
                             ApplicationConfig config) {
+        this(repository, generator, config, Clock.systemUTC());
+    }
+
+    public ShortLinkService(ShortLinkRepository repository,
+                            ShortKeyGenerator generator,
+                            ApplicationConfig config,
+                            Clock clock) {
         this.repository = Objects.requireNonNull(repository, "repository");
         this.generator = Objects.requireNonNull(generator, "generator");
         Objects.requireNonNull(config, "config");
+        this.clock = Objects.requireNonNull(clock, "clock");
 
         if (config.ttlSeconds <= 0) throw new ValidationException("link.ttl.seconds must be positive");
         if (config.defaultMaxClicks <= 0) throw new ValidationException("link.default.max-clicks must be positive");
@@ -56,9 +67,8 @@ public class ShortLinkService {
         validateUrl(originalUrl);
         validateOwner(ownerUuid);
         validateMaxClicks(maxClicks);
-        if (maxClicks <= 0) throw new ValidationException("maxClicks must be positive");
 
-        Instant now = Instant.now();
+        Instant now = Instant.now(clock);
         Instant expiresAt = now.plusSeconds(ttlSeconds);
 
         String shortKey = generateUniqueShortKey();
@@ -80,7 +90,7 @@ public class ShortLinkService {
         ShortLink link = repository.findByShortKey(shortKey)
                 .orElseThrow(() -> new NotFoundException("Short link not found: " + shortKey));
 
-        Instant now = Instant.now();
+        Instant now = Instant.now(clock);
 
         // TTL
         if (link.isExpiredByTtl(now)) {
@@ -108,7 +118,7 @@ public class ShortLinkService {
         if (link.getClicks() >= link.getMaxClicks()) {
             link.markExpiredByClicks();
 
-            System.out.println("[INFO] Link " + link.getShortKey()
+            System.out.println("Link " + link.getShortKey()
                     + " expired: click limit reached (" + link.getMaxClicks() + ")");
         }
 
