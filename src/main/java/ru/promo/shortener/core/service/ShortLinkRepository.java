@@ -17,4 +17,6 @@ public interface ShortLinkRepository {
     boolean deleteByShortKey(String shortKey);
 
     List<ShortLink> findExpired(Instant now);
+
+    List<ShortLink> findAll();
 }

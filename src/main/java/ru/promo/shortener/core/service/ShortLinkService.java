@@ -8,6 +8,7 @@ import ru.promo.shortener.core.service.exceptions.ValidationException;
 
 import java.time.Instant;
 import java.util.Objects;
+import java.net.URI;
 
 public class ShortLinkService {
 
@@ -20,6 +21,8 @@ public class ShortLinkService {
     private final int initialKeyLength;
     private final int maxKeyLength;
     private final int attemptsPerLength;
+
+    private static final int MAX_URL_LENGTH = 2048;
 
     public ShortLinkService(ShortLinkRepository repository,
                             ShortKeyGenerator generator,
@@ -52,6 +55,7 @@ public class ShortLinkService {
     public ShortLink create(String originalUrl, String ownerUuid, int maxClicks) {
         validateUrl(originalUrl);
         validateOwner(ownerUuid);
+        validateMaxClicks(maxClicks);
         if (maxClicks <= 0) throw new ValidationException("maxClicks must be positive");
 
         Instant now = Instant.now();
@@ -66,7 +70,12 @@ public class ShortLinkService {
 
     // resolve (переход): проверка TTL/лимита + регистрация клика + вернуть originalUrl
     public String resolve(String shortKey) {
-        if (shortKey == null || shortKey.isBlank()) throw new ValidationException("shortKey must not be blank");
+        if (shortKey == null || shortKey.isBlank()) {
+            throw new ValidationException("shortKey must not be empty");
+        }
+        if (shortKey.contains(" ")) {
+            throw new ValidationException("shortKey must not contain spaces");
+        }
 
         ShortLink link = repository.findByShortKey(shortKey)
                 .orElseThrow(() -> new NotFoundException("Short link not found: " + shortKey));
@@ -109,9 +118,14 @@ public class ShortLinkService {
 
     // редактирование лимита владельцем
     public ShortLink updateMaxClicks(String shortKey, String ownerUuid, int newMaxClicks) {
-        if (shortKey == null || shortKey.isBlank()) throw new ValidationException("shortKey must not be blank");
+        if (shortKey == null || shortKey.isBlank()) {
+            throw new ValidationException("shortKey must not be empty");
+        }
+        if (shortKey.contains(" ")) {
+            throw new ValidationException("shortKey must not contain spaces");
+        }
         validateOwner(ownerUuid);
-        if (newMaxClicks <= 0) throw new ValidationException("newMaxClicks must be positive");
+        validateMaxClicks(newMaxClicks);
 
         ShortLink link = repository.findByShortKey(shortKey)
                 .orElseThrow(() -> new NotFoundException("Short link not found: " + shortKey));
@@ -125,13 +139,25 @@ public class ShortLinkService {
         }
 
         link.setMaxClicks(newMaxClicks);
+
+        if (link.getClicks() >= link.getMaxClicks()) {
+            link.markExpiredByClicks();
+            repository.save(link);
+            return link;
+        }
+
         repository.save(link);
         return link;
     }
 
     // удаление владельцем
     public boolean deleteByOwner(String shortKey, String ownerUuid) {
-        if (shortKey == null || shortKey.isBlank()) throw new ValidationException("shortKey must not be blank");
+        if (shortKey == null || shortKey.isBlank()) {
+            throw new ValidationException("shortKey must not be empty");
+        }
+        if (shortKey.contains(" ")) {
+            throw new ValidationException("shortKey must not contain spaces");
+        }
         validateOwner(ownerUuid);
 
         ShortLink link = repository.findByShortKey(shortKey)
@@ -164,12 +190,48 @@ public class ShortLinkService {
         if (ownerUuid == null || ownerUuid.isBlank()) throw new ValidationException("ownerUuid must not be blank");
     }
 
-    private void validateUrl(String originalUrl) {
-        if (originalUrl == null || originalUrl.isBlank()) {
-            throw new ValidationException("originalUrl must not be blank");
+    private void validateUrl(String url) {
+        if (url == null || url.isBlank()) {
+            throw new ValidationException("URL must not be empty");
         }
-        if (!originalUrl.startsWith("http://") && !originalUrl.startsWith("https://")) {
-            throw new ValidationException("originalUrl must start with http:// or https://");
+
+        String normalizedUrl = url.trim();
+
+        if (normalizedUrl.length() > MAX_URL_LENGTH) {
+            throw new ValidationException("URL is too long (max " + MAX_URL_LENGTH + " characters)");
+        }
+
+        final URI uri;
+        try {
+            uri = new URI(normalizedUrl);
+        } catch (Exception e) {
+            throw new ValidationException("Invalid URL format");
+        }
+
+        String scheme = uri.getScheme();
+        if (scheme == null || (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme))) {
+            throw new ValidationException("URL must start with http:// or https://");
+        }
+
+        String host = uri.getHost();
+        if (host == null) {
+            throw new ValidationException("URL must contain a host");
+        }
+
+        boolean isLocalhost = host.equalsIgnoreCase("localhost");
+        boolean isIpv4 = host.matches("\\d{1,3}(\\.\\d{1,3}){3}");
+        boolean hasDot = host.contains(".");
+
+        if (!isLocalhost && !isIpv4 && !hasDot) {
+            throw new ValidationException(
+                    "Host must be a valid domain, localhost, or IPv4 address"
+            );
+        }
+    }
+
+    private void validateMaxClicks(int maxClicks) {
+        if (maxClicks <= 0) {
+            throw new ValidationException("maxClicks must be greater than 0");
         }
     }
 }

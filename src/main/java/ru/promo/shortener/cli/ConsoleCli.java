@@ -1,6 +1,7 @@
 package ru.promo.shortener.cli;
 
 import ru.promo.shortener.core.model.ShortLink;
+import ru.promo.shortener.core.model.LinkStatus;
 import ru.promo.shortener.core.service.ShortLinkRepository;
 import ru.promo.shortener.core.service.ShortLinkService;
 import ru.promo.shortener.core.service.exceptions.AccessDeniedException;
@@ -10,8 +11,11 @@ import ru.promo.shortener.core.user.UserIdentityProvider;
 
 import java.awt.Desktop;
 import java.net.URI;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Scanner;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 
 public class ConsoleCli {
 
@@ -25,6 +29,19 @@ public class ConsoleCli {
         this.service = service;
         this.repository = repository;
         this.users = users;
+    }
+
+    private static final DateTimeFormatter TIME_FORMAT =
+            DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")
+                    .withZone(ZoneId.systemDefault());
+
+    private String shortStatus(LinkStatus status) {
+        return switch (status) {
+            case ACTIVE -> "ACTIVE";
+            case EXPIRED_BY_CLICKS -> "CLICKS";
+            case EXPIRED_BY_TTL -> "TTL";
+            case DELETED -> "DELETED";
+        };
     }
 
     public void run() {
@@ -77,6 +94,7 @@ public class ConsoleCli {
             case "create" -> handleCreate(parts);
             case "open" -> handleOpen(parts);
             case "list" -> handleList();
+            case "list-all" -> handleListAll();
             case "set-limit" -> handleSetLimit(parts);
             case "delete" -> handleDelete(parts);
 
@@ -130,7 +148,7 @@ public class ConsoleCli {
         System.out.println("  shortKey: " + link.getShortKey());
         System.out.println("  original: " + link.getOriginalUrl());
         System.out.println("  maxClicks: " + link.getMaxClicks());
-        System.out.println("  expiresAt: " + link.getExpiresAt());
+        System.out.println("  expiresAt: " + TIME_FORMAT.format(link.getExpiresAt()));
     }
 
     private void handleOpen(String[] parts) throws Exception {
@@ -162,11 +180,55 @@ public class ConsoleCli {
         for (ShortLink l : links) {
             System.out.println("- " + l.getShortKey()
                     + " -> " + l.getOriginalUrl()
-                    + " | clicks " + l.getClicks() + "/" + l.getMaxClicks()
-                    + " | status " + l.getStatus()
-                    + " | expiresAt " + l.getExpiresAt());
+                    + " | clicks: " + l.getClicks() + "/" + l.getMaxClicks()
+                    + " | status: " + l.getStatus());
         }
     }
+
+    private void handleListAll() {
+        List<ShortLink> links = repository.findAll();
+
+        if (links.isEmpty()) {
+            System.out.println("No links in system.");
+            return;
+        }
+
+        // Чтобы вывод был стабильный и красивый
+        links = links.stream()
+                .sorted(Comparator
+                        .comparing(ShortLink::getOwnerUuid)
+                        .thenComparing(ShortLink::getShortKey))
+                .toList();
+
+        // Заголовок
+        System.out.printf(
+                "%-36s  %-10s  %-7s  %-12s  %-19s  %s%n",
+                "OWNER UUID", "SHORTKEY", "STATUS", "CLICKS", "EXPIRES AT", "ORIGINAL"
+        );
+        System.out.println("-".repeat(36 + 2 + 10 + 2 + 7 + 2 + 12 + 2 + 19 + 2 + 30));
+
+        for (ShortLink l : links) {
+            String clicks = l.getClicks() + "/" + l.getMaxClicks();
+            String expires = TIME_FORMAT.format(l.getExpiresAt());
+
+            // Чтобы длинные URL не ломали консоль
+            String original = l.getOriginalUrl();
+            if (original.length() > 60) {
+                original = original.substring(0, 57) + "...";
+            }
+
+            System.out.printf(
+                    "%-36s  %-10s  %-7s  %-12s  %-19s  %s%n",
+                    l.getOwnerUuid(),
+                    l.getShortKey(),
+                    shortStatus(l.getStatus()),
+                    clicks,
+                    expires,
+                    original
+            );
+        }
+    }
+
 
     private void handleSetLimit(String[] parts) {
         if (parts.length != 3) {
@@ -179,6 +241,11 @@ public class ConsoleCli {
 
         ShortLink updated = service.updateMaxClicks(shortKey, currentUser(), newMaxClicks);
         System.out.println("Updated: " + updated.getShortKey() + " maxClicks=" + updated.getMaxClicks());
+
+        if (updated.getStatus() == LinkStatus.EXPIRED_BY_CLICKS) {
+            System.out.println("Notice: link is now unavailable because clicks (" +
+                    updated.getClicks() + ") already reached/exceeded the new limit.");
+        }
     }
 
     private void handleDelete(String[] parts) {
@@ -201,7 +268,8 @@ public class ConsoleCli {
                 Links:
                   create <url> [maxClicks]
                   open <shortKey>
-                  list
+                  list         (debug) mini
+                  list-all
                   set-limit <shortKey> <newMaxClicks>
                   delete <shortKey>
 

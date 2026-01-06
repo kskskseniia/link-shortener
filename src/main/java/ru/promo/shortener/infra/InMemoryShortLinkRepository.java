@@ -102,4 +102,9 @@ public class InMemoryShortLinkRepository implements ShortLinkRepository {
         }
         return expired;
     }
+
+    @Override
+    public List<ShortLink> findAll() {
+        return new ArrayList<>(byShortKey.values());
+    }
 }
