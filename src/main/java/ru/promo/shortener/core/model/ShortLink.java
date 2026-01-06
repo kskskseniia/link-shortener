@@ -72,8 +72,5 @@ public final class ShortLink {
 
     public void registerClick() {
         this.clicks++;
-        if (this.clicks >= this.maxClicks) {
-            markExpiredByClicks();
-        }
     }
 }

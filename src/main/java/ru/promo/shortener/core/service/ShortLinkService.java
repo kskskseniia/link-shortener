@@ -73,24 +73,37 @@ public class ShortLinkService {
 
         Instant now = Instant.now();
 
+        // TTL
         if (link.isExpiredByTtl(now)) {
             link.markExpiredByTtl();
             repository.save(link);
             throw new ValidationException("Link expired by TTL");
         }
 
+        // Если уже не активна (удалена/протухла)
         if (!link.isActive()) {
             throw new ValidationException("Link is not active. Status: " + link.getStatus());
         }
 
-        link.registerClick();
-        repository.save(link);
-
-        if (!link.isActive()) {
-            // только что исчерпали лимит
+        // КЛЮЧЕВАЯ ПРОВЕРКА: если лимит уже исчерпан — блокируем
+        if (link.getClicks() >= link.getMaxClicks()) {
+            link.markExpiredByClicks();
+            repository.save(link);
             throw new ValidationException("Link expired by clicks limit");
         }
 
+        // Разрешаем переход и учитываем клик
+        link.registerClick();
+
+        // Если это был последний разрешённый клик — пометим, чтобы следующий уже блокировался
+        if (link.getClicks() >= link.getMaxClicks()) {
+            link.markExpiredByClicks();
+
+            System.out.println("[INFO] Link " + link.getShortKey()
+                    + " expired: click limit reached (" + link.getMaxClicks() + ")");
+        }
+
+        repository.save(link);
         return link.getOriginalUrl();
     }
 
